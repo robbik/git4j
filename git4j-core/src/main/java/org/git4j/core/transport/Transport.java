@@ -8,6 +8,20 @@ import org.git4j.core.objs.UploadPack;
 
 public interface Transport {
 
+	public static final int TYPE_FETCH = 1;
+
+	public static final int TYPE_UPLOAD_PACK = 2;
+
+	public static final int TYPE_OK = 3;
+
+	public static final int TYPE_ERROR_MSG = 4;
+	
+	public static final String ERROR_CODE_GIT = "01";
+	
+	public static final String ERROR_CODE_IO = "02";
+	
+	public static final String ERROR_CODE_UNKNOWN = "FF";
+
 	/**
 	 * fetch objects from given remote branches started from <code>tip</code> to
 	 * HEAD.

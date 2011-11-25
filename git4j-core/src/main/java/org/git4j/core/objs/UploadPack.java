@@ -1,15 +1,13 @@
 package org.git4j.core.objs;
 
-import java.io.Externalizable;
 import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-
-
-public class UploadPack implements Externalizable {
+public class UploadPack implements Serializable {
 
 	private static final long serialVersionUID = -2897044870639459633L;
 
@@ -63,8 +61,18 @@ public class UploadPack implements Externalizable {
 		this.blobs = blobs;
 	}
 
-	public void readExternal(ObjectInput in) throws IOException,
-			ClassNotFoundException {
+	public UploadPack deserialize(ObjectInputStream in)
+			throws ClassNotFoundException, IOException {
+		readObject(in);
+		return this;
+	}
+
+	public void serialize(ObjectOutputStream out) throws IOException {
+		writeObject(out);
+	}
+
+	private void readObject(ObjectInputStream in)
+			throws ClassNotFoundException, IOException {
 
 		branch = in.readUTF();
 		headRef = in.readUTF();
@@ -88,7 +96,7 @@ public class UploadPack implements Externalizable {
 		}
 	}
 
-	public void writeExternal(ObjectOutput out) throws IOException {
+	private void writeObject(ObjectOutputStream out) throws IOException {
 		out.writeUTF(branch);
 		out.writeUTF(headRef);
 
