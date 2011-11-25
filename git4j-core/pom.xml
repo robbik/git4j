@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.git4j</groupId>
+    <artifactId>git4j-core</artifactId>
+
+    <packaging>bundle</packaging>
+
+    <name>Git4J Core</name>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <description>Git4J</description>
+    <url>http://code.google.com/p/git4j/</url>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <slf4j.version>1.6.1</slf4j.version>
+        <maven-surefire-plugin-version>2.7.1</maven-surefire-plugin-version>
+    </properties>
+
+    <licenses>
+       <license>
+           <name>The Apache Software License, Version 2.0</name>
+           <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+           <distribution>repo</distribution>
+       </license>
+    </licenses>
+
+    <issueManagement>
+        <url>http://code.google.com/p/git4j/issues/</url>
+    </issueManagement>
+
+    <scm>
+        <url>git@github.com:robbik/git4j.git</url>
+        <connection>scm:git:git@github.com:robbik/git4j.git</connection>
+        <developerConnection>scm:git:git@github.com:robbik/git4j.git</developerConnection>
+    </scm>
+
+    <developers>
+        <developer>
+            <id>robbi.kurniawan</id>
+            <name>Robbi Kurniawan</name>
+            <email>robbi.kurniawan@gmail.com</email>
+        </developer>
+    </developers>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>2.0.2</version>
+                <configuration>
+                    <source>1.5</source>
+                    <target>1.5</target>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+                <extensions>true</extensions>
+                <version>2.1.0</version>
+                <configuration>
+                    <instructions>
+                        <Bundle-DocURL>${project.url}</Bundle-DocURL>
+                        <Import-Package>
+                            org.slf4j;resolution:=optional,
+                            org.apache.commons.logging;resolution:=optional,
+                            java.util.logging;resolution:=optional,
+                            java.sql;resolution:=optional,
+                            javax.sql;resolution:=optional,
+                            *
+                        </Import-Package>
+                        <Export-Package>
+                            org.git4j.core;version=${project.version},
+                            org.git4j.core.gen;version=${project.version},
+                            org.git4j.core.objs;version=${project.version},
+                            org.git4j.core.repo;version=${project.version},
+                            org.git4j.core.transport;version=${project.version}
+                        </Export-Package>
+                        <Private-Package>
+                            org.git4j.core.impl,
+                            org.git4j.core.logging,
+                            org.git4j.core.util
+                        </Private-Package>
+                    </instructions>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin-version}</version>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>snapshots</id>
+
+            <distributionManagement>
+                <repository>
+                    <id>oss-sonatype-snapshots</id>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+                </repository>
+            </distributionManagement>
+        </profile>
+
+        <profile>
+            <id>releases</id>
+
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>1.1</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+
+            <distributionManagement>
+                <repository>
+                    <id>oss-sonatype-releases</id>
+                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                </repository>
+            </distributionManagement>
+        </profile>
+    </profiles>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-logging</groupId>
+            <artifactId>commons-logging</artifactId>
+            <version>1.1.1</version>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.8.1</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.13</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
