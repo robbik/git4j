@@ -1,10 +1,6 @@
 package org.git4j.core.repo;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,6 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -20,8 +17,8 @@ import org.git4j.core.GitException;
 import org.git4j.core.objs.Blob;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.Commit;
-import org.git4j.core.objs.GitObject;
 import org.git4j.core.objs.UploadPack;
+import org.git4j.core.util.StringUtils;
 
 public class JDBCRepository implements Repository {
 
@@ -31,7 +28,172 @@ public class JDBCRepository implements Repository {
 		this.ds = ds;
 	}
 
-	private void store(String id, byte[] content) throws IOException {
+	private Commit loadCommit(String id) throws IOException {
+		Connection conn = null;
+
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
+
+		Commit commit = new Commit();
+
+		try {
+			conn = ds.getConnection();
+			conn.setAutoCommit(false);
+			conn.setReadOnly(true);
+
+			pstmt = conn
+					.prepareStatement("SELECT cauthor, cdate, cparent2, cmessage, cparent FROM git_commits WHERE id = ?");
+
+			pstmt.setString(1, id);
+
+			rs = pstmt.executeQuery();
+			if (rs.next()) {
+				commit.setAuthor(rs.getString(1));
+				commit.setDate(rs.getString(2));
+				commit.setParent2(rs.getString(3));
+				commit.setMessage(rs.getString(4));
+				commit.setParent(rs.getString(5));
+
+				rs.close();
+				rs = null;
+				
+				pstmt.close();
+				pstmt = null;
+				
+				Map<String, String> index = commit.index();
+				
+				pstmt = conn.prepareStatement("SELECT obj_name, blob_id FROM git_index WHERE commit_id = ?");
+				pstmt.setString(1, id);
+				
+				rs = pstmt.executeQuery();
+				while (rs.next()) {
+					index.put(rs.getString(1), rs.getString(2));
+				}
+
+				if (!commit.getId().equals(id)) {
+					throw new SQLException("confusing because of inconsistent object");
+				}
+			}
+
+			conn.commit();
+		} catch (SQLException e) {
+			if (conn != null) {
+				try {
+					conn.rollback();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			throw (IOException) new IOException().initCause(e);
+		} finally {
+			if (rs != null) {
+				try {
+					rs.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			if (pstmt != null) {
+				try {
+					pstmt.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			if (conn != null) {
+				try {
+					conn.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+		}
+
+		return commit;
+	}
+
+	private Blob loadBlob(String id) throws IOException {
+		Connection conn = null;
+
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
+
+		Blob blob = new Blob();
+
+		try {
+			conn = ds.getConnection();
+			conn.setAutoCommit(false);
+			conn.setReadOnly(true);
+
+			pstmt = conn
+					.prepareStatement("SELECT content_type, content FROM git_blobs WHERE id = ?");
+			pstmt.setString(1, id);
+
+			rs = pstmt.executeQuery();
+			if (rs.next()) {
+				blob.setContent(rs.getBytes(2), rs.getString(1));
+			}
+			
+			if (!blob.getId().equals(id)) {
+				throw new SQLException("confusing because of inconsistent object");
+			}
+
+			conn.commit();
+		} catch (SQLException e) {
+			if (conn != null) {
+				try {
+					conn.rollback();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			throw (IOException) new IOException().initCause(e);
+		} finally {
+			if (rs != null) {
+				try {
+					rs.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			if (pstmt != null) {
+				try {
+					pstmt.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+
+			if (conn != null) {
+				try {
+					conn.close();
+				} catch (Throwable t) {
+					// do nothing
+				}
+			}
+		}
+
+		return blob;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Blob)
+	 */
+	public String store(Blob blob) throws IOException {
+		byte[] contentAsBytes = blob.getContentAsBytes();
+		if (contentAsBytes == null) {
+			throw new IllegalArgumentException("blob content MUST NOT be NULL");
+		}
+
+		String id = blob.getId();
+
 		Connection conn = null;
 
 		PreparedStatement pstmt = null;
@@ -42,7 +204,7 @@ public class JDBCRepository implements Repository {
 			conn.setAutoCommit(false);
 
 			pstmt = conn
-					.prepareStatement("SELECT id FROM git_objects WHERE id = ?");
+					.prepareStatement("SELECT id FROM git_blobs WHERE id = ?");
 
 			pstmt.setString(1, id);
 
@@ -54,10 +216,11 @@ public class JDBCRepository implements Repository {
 
 			if (!found) {
 				pstmt = conn
-						.prepareStatement("INSERT INTO git_objects (id, content) VALUES (?, ?)");
+						.prepareStatement("INSERT INTO git_blobs (id, content_type, content) VALUES (?, ?, ?)");
 
 				pstmt.setString(1, id);
-				pstmt.setBytes(2, content);
+				pstmt.setString(2, blob.getContentType());
+				pstmt.setBytes(3, contentAsBytes);
 
 				int eu;
 				if ((eu = pstmt.executeUpdate()) != 1) {
@@ -102,28 +265,70 @@ public class JDBCRepository implements Repository {
 				}
 			}
 		}
+
+		return id;
 	}
 
-	private byte[] load(String id) throws IOException {
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Commit)
+	 */
+	public String store(Commit commit) throws IOException {
+		String id = commit.getId();
+
 		Connection conn = null;
+
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
-
-		byte[] content = null;
 
 		try {
 			conn = ds.getConnection();
 			conn.setAutoCommit(false);
-			conn.setReadOnly(true);
 
 			pstmt = conn
-					.prepareStatement("SELECT content FROM git_objects WHERE id = ?");
+					.prepareStatement("SELECT id FROM git_commits WHERE id = ?");
 
 			pstmt.setString(1, id);
 
 			rs = pstmt.executeQuery();
-			if (rs.next()) {
-				content = rs.getBytes(1);
+			boolean found = rs.next();
+
+			rs.close();
+			pstmt.close();
+
+			if (!found) {
+				pstmt = conn
+						.prepareStatement("INSERT INTO git_commits (id, cauthor, cdate, cparent2, cmessage, cparent) VALUES (?, ?, ?, ?, ?, ?)");
+
+				pstmt.setString(1, commit.getId());
+				StringUtils.setStringOrNull(pstmt, 2, commit.getAuthor());
+				pstmt.setString(3, commit.getDateAsString());
+				StringUtils.setStringOrNull(pstmt, 4, commit.getParent2());
+				StringUtils.setStringOrNull(pstmt, 5, commit.getMessage());
+				StringUtils.setStringOrNull(pstmt, 6, commit.getParent());
+
+				int eu;
+				if ((eu = pstmt.executeUpdate()) != 1) {
+					throw new SQLException(
+							"insert statement return unexpected result " + eu);
+				}
+				
+				pstmt.close();
+				pstmt = null;
+				
+				pstmt = conn.prepareStatement("INSERT INTO git_index (commit_id, obj_name, blob_id) VALUES (?, ?, ?)");
+				pstmt.setString(1, id);
+				
+				for (Map.Entry<String, String> entry : commit.index().entrySet()) {
+					pstmt.setString(2, entry.getKey());
+					pstmt.setString(3, entry.getValue());
+
+					if ((eu = pstmt.executeUpdate()) != 1) {
+						throw new SQLException(
+								"insert statement return unexpected result " + eu);
+					}
+				}
 			}
 
 			conn.commit();
@@ -163,39 +368,7 @@ public class JDBCRepository implements Repository {
 			}
 		}
 
-		return content;
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Blob)
-	 */
-	public void store(Blob blob) throws IOException {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-		ObjectOutputStream oos = new ObjectOutputStream(baos);
-		oos.write(1);
-		blob.serialize(oos);
-		oos.close();
-
-		store(blob.getId(), baos.toByteArray());
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Commit)
-	 */
-	public void store(Commit commit) throws IOException {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-		ObjectOutputStream oos = new ObjectOutputStream(baos);
-		oos.write(0);
-		commit.serialize(oos);
-		oos.close();
-
-		store(commit.getId(), baos.toByteArray());
+		return id;
 	}
 
 	/*
@@ -218,45 +391,19 @@ public class JDBCRepository implements Repository {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see org.git4j.core.repo.Repository#load(java.lang.String,
-	 * java.lang.Class)
+	 * @see org.git4j.core.repo.Repository#find(java.lang.Class,
+	 * java.lang.String)
 	 */
-	public <T extends GitObject> T load(String id, Class<T> type)
-			throws IOException {
-
-		byte[] content = load(id);
-		if (content == null) {
-			return null;
+	public <T> T find(Class<T> type, String id) throws IOException {
+		if (Commit.class.isAssignableFrom(type)) {
+			return type.cast(loadCommit(id));
 		}
 
-		ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(
-				content));
-
-		Object o;
-
-		try {
-			switch (ois.readByte()) {
-			case 0:
-				o = new Commit().deserialize(ois);
-				break;
-			case 1:
-				o = new Blob().deserialize(ois);
-				break;
-			default:
-				o = null;
-				break;
-			}
-		} catch (ClassNotFoundException e) {
-			throw (IOException) new IOException().initCause(e);
-		} finally {
-			try {
-				ois.close();
-			} catch (Throwable t) {
-				// do nothing
-			}
+		if (Blob.class.isAssignableFrom(type)) {
+			return type.cast(loadBlob(id));
 		}
 
-		return type.cast(o);
+		return null;
 	}
 
 	/*
@@ -265,7 +412,12 @@ public class JDBCRepository implements Repository {
 	 * @see org.git4j.core.repo.Repository#getLocalHead(java.lang.String)
 	 */
 	public Commit getLocalHead(String branch) throws IOException {
-		return load(getLocalHeadRef(branch), Commit.class);
+		String headRef = getLocalHeadRef(branch);
+		if (headRef == null) {
+			return null;
+		}
+
+		return find(Commit.class, headRef);
 	}
 
 	/*
@@ -866,9 +1018,11 @@ public class JDBCRepository implements Repository {
 
 			stmt = conn.createStatement();
 
-			stmt.executeUpdate("TRUNCATE TABLE git_refs_remoted");
+			stmt.executeUpdate("TRUNCATE TABLE git_refs_remotes");
 			stmt.executeUpdate("TRUNCATE TABLE git_refs_heads");
-			stmt.executeUpdate("TRUNCATE TABLE git_objects");
+			stmt.executeUpdate("TRUNCATE TABLE git_commits");
+			stmt.executeUpdate("TRUNCATE TABLE git_blobs");
+			stmt.executeUpdate("TRUNCATE TABLE git_index");
 
 			stmt.close();
 			conn.commit();

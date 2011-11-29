@@ -35,10 +35,9 @@ public abstract class ObjectUtils {
 
 		if (!Serializable.class.isInstance(content)
 				&& !byte[].class.isInstance(content)
-				&& !String.class.isInstance(content)
-				&& !char[].class.isInstance(content)) {
+				&& !String.class.isInstance(content)) {
 			throw new ClassCastException(
-					"content MUST be a serializable or byte[] or String or char[] object");
+					"content MUST be a serializable or byte[] or String object");
 		}
 	}
 
@@ -63,7 +62,7 @@ public abstract class ObjectUtils {
 		String currentId = fromId;
 
 		while ((currentId != null) && !(fastForward = currentId.equals(toId))) {
-			Commit current = repo.load(currentId, Commit.class);
+			Commit current = repo.find(Commit.class, currentId);
 			if (current == null) {
 				throw new GitException("unable to find commit " + currentId);
 			}
@@ -107,7 +106,7 @@ public abstract class ObjectUtils {
 		String currentId = fromId;
 
 		while ((currentId != null) && !(fastForward = currentId.equals(toId))) {
-			Commit current = repo.load(currentId, Commit.class);
+			Commit current = repo.find(Commit.class, currentId);
 			if (current == null) {
 				throw new GitException("unable to find commit " + currentId);
 			}
@@ -121,7 +120,7 @@ public abstract class ObjectUtils {
 			if (collectBLOBs) {
 				for (String oid : current.index().values()) {
 					if (!blobs.containsKey(oid)) {
-						Blob blob = repo.load(oid, Blob.class);
+						Blob blob = repo.find(Blob.class, oid);
 
 						if (blob == null) {
 							throw new GitException("unable to find blob " + oid);
@@ -309,7 +308,7 @@ public abstract class ObjectUtils {
 					break;
 				}
 
-				Commit pointA = repo.load(idA, Commit.class);
+				Commit pointA = repo.find(Commit.class, idA);
 				if (pointA == null) {
 					throw new GitException("unable to find commit " + idA);
 				}
@@ -325,7 +324,7 @@ public abstract class ObjectUtils {
 					break;
 				}
 
-				Commit pointB = repo.load(idB, Commit.class);
+				Commit pointB = repo.find(Commit.class, idB);
 				if (pointB == null) {
 					throw new GitException("unable to find commit " + idB);
 				}

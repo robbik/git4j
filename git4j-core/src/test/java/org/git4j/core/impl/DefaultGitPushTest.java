@@ -40,6 +40,8 @@ public class DefaultGitPushTest {
 		Repository repo = new InMemoryRepository();
 		Repository repoRemote = new InMemoryRepository();
 
+		repo.wipe();
+
 		git = new DefaultGit(repo);
 		remote = new DefaultGit(repoRemote);
 

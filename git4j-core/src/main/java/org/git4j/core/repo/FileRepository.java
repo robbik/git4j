@@ -8,8 +8,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,7 +19,6 @@ import org.git4j.core.GitException;
 import org.git4j.core.objs.Blob;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.Commit;
-import org.git4j.core.objs.GitObject;
 import org.git4j.core.objs.UploadPack;
 
 public class FileRepository implements Repository {
@@ -57,20 +56,18 @@ public class FileRepository implements Repository {
 	}
 
 	private void write(Object o, File target) throws IOException {
-		ObjectOutputStream oos = new ObjectOutputStream(
-				new BufferedOutputStream(new FileOutputStream(target)));
+		OutputStream out = new BufferedOutputStream(
+				new FileOutputStream(target));
 
 		try {
 			if (o instanceof Commit) {
-				oos.write(0);
-				((Commit) o).serialize(oos);
+				((Commit) o).writeObject(out);
 			} else if (o instanceof Blob) {
-				oos.write(1);
-				((Blob) o).serialize(oos);
+				((Blob) o).writeObject(out);
 			}
 		} finally {
 			try {
-				oos.close();
+				out.close();
 			} catch (Throwable t) {
 				// do nothing
 			}
@@ -78,29 +75,24 @@ public class FileRepository implements Repository {
 	}
 
 	private <T> T read(File source, Class<T> type) throws IOException {
-		ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(
-				new FileInputStream(source)));
+		InputStream in = new BufferedInputStream(new FileInputStream(source));
 
 		Object o;
 
 		try {
-			switch (ois.readByte()) {
-			case 0:
-				o = new Commit().deserialize(ois);
-				break;
-			case 1:
-				o = new Blob().deserialize(ois);
-				break;
-			default:
+			if (Commit.class.isAssignableFrom(type)) {
+				o = new Commit().readObject(in);
+			} else if (Blob.class.isAssignableFrom(type)) {
+				o = new Blob().readObject(in);
+			} else {
 				o = null;
-				break;
 			}
 		} catch (ClassNotFoundException e) {
 			throw (IOException) new IOException(
 					"unable to read object from file " + source).initCause(e);
 		} finally {
 			try {
-				ois.close();
+				in.close();
 			} catch (Throwable t) {
 				// do nothing
 			}
@@ -130,12 +122,15 @@ public class FileRepository implements Repository {
 	 * 
 	 * @see org.git4j.core.GitRepository#store(org.git4j.core.impl.Blob)
 	 */
-	public void store(Blob blob) throws IOException {
-		File target = new File(objects, blob.getId());
+	public String store(Blob blob) throws IOException {
+		String id = blob.getId();
+		File target = new File(objects, id);
 
 		if (!target.canRead()) {
 			write(blob, target);
 		}
+
+		return id;
 	}
 
 	/*
@@ -143,12 +138,15 @@ public class FileRepository implements Repository {
 	 * 
 	 * @see org.git4j.core.GitRepository#store(org.git4j.core.impl.Commit)
 	 */
-	public void store(Commit commit) throws IOException {
-		File target = new File(objects, commit.getId());
+	public String store(Commit commit) throws IOException {
+		String id = commit.getId();
+		File target = new File(objects, id);
 
 		if (!target.canRead()) {
 			write(commit, target);
 		}
+
+		return id;
 	}
 
 	/*
@@ -171,10 +169,9 @@ public class FileRepository implements Repository {
 	/*
 	 * (non-Javadoc)
 	 * 
-	 * @see org.git4j.core.GitRepository#load(java.lang.String, java.lang.Class)
+	 * @see org.git4j.core.GitRepository#find(java.lang.Class, java.lang.String)
 	 */
-	public <T extends GitObject> T load(String id, Class<T> type)
-			throws IOException {
+	public <T> T find(Class<T> type, String id) throws IOException {
 		if (id == null) {
 			return null;
 		}
@@ -184,10 +181,7 @@ public class FileRepository implements Repository {
 			return null;
 		}
 
-		T o = read(source, type);
-		o.setId(id);
-
-		return o;
+		return read(source, type);
 	}
 
 	/*
@@ -196,7 +190,7 @@ public class FileRepository implements Repository {
 	 * @see org.git4j.core.GitRepository#getLocalHead(java.lang.String)
 	 */
 	public Commit getLocalHead(String branch) throws IOException {
-		return load(getLocalHeadRef(branch), Commit.class);
+		return find(Commit.class, getLocalHeadRef(branch));
 	}
 
 	/*

@@ -10,14 +10,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 import org.git4j.core.ConflictResolution;
 import org.git4j.core.Git;
 import org.git4j.core.GitException;
 import org.git4j.core.Workspace;
-import org.git4j.core.gen.ObjectIdGenerator;
-import org.git4j.core.gen.SHA256Generator;
 import org.git4j.core.logging.Logger;
 import org.git4j.core.logging.LoggerFactory;
 import org.git4j.core.objs.Blob;
@@ -42,8 +39,6 @@ public class DefaultGit implements Git {
 
 	private Repository repo;
 
-	private ObjectIdGenerator idgen;
-
 	/**
 	 * Create a new instance of GitImpl
 	 * 
@@ -52,11 +47,6 @@ public class DefaultGit implements Git {
 	 */
 	public DefaultGit(Repository repo) {
 		this.repo = repo;
-		idgen = new SHA256Generator();
-	}
-
-	public void setObjectIdGenerator(ObjectIdGenerator idgen) {
-		this.idgen = idgen;
 	}
 
 	/*
@@ -75,7 +65,6 @@ public class DefaultGit implements Git {
 		}
 
 		Commit commit = new Commit();
-		commit.setId(idgen.generate(branch + "#COMMIT$" + UUID.randomUUID()));
 		commit.setAuthor(author);
 		commit.setMessage(msg);
 
@@ -85,7 +74,9 @@ public class DefaultGit implements Git {
 
 		if (head != null) {
 			if (!head.getId().equals(workspace.getCommitId())) {
-				throw new GitException("workspace is not checked out for HEAD");
+				throw new GitException("workspace (" + workspace.getCommitId()
+						+ ") is not checked out for HEAD (" + head.getId()
+						+ ")");
 			}
 
 			commit.setParent(head.getId());
@@ -94,22 +85,16 @@ public class DefaultGit implements Git {
 
 		for (Map.Entry<String, Object> e : workspace.added().entrySet()) {
 			Blob blob = new Blob();
-			blob.setId(idgen.generate(e.getValue()));
 			blob.setContent(e.getValue());
 
-			repo.store(blob);
-
-			index.put(e.getKey(), blob.getId());
+			index.put(e.getKey(), repo.store(blob));
 		}
 
 		for (Map.Entry<String, Object> e : workspace.modified().entrySet()) {
 			Blob blob = new Blob();
-			blob.setId(idgen.generate(e.getValue()));
 			blob.setContent(e.getValue());
 
-			repo.store(blob);
-
-			index.put(e.getKey(), blob.getId());
+			index.put(e.getKey(), repo.store(blob));
 		}
 
 		for (String name : workspace.removed()) {
@@ -117,14 +102,14 @@ public class DefaultGit implements Git {
 		}
 
 		// store COMMIT
-		repo.store(commit);
+		String commitId = repo.store(commit);
 
 		// set branch HEAD
 		repo.setLocalHeadRef(branch, head == null ? null : head.getId(),
-				commit.getId());
+				commitId);
 
 		workspace.update(commit);
-		return commit.getId();
+		return commitId;
 	}
 
 	/*
@@ -208,7 +193,7 @@ public class DefaultGit implements Git {
 					"resolution must be LEAVE or USE_BRANCH or USE_COMMIT");
 		}
 
-		Commit commit = repo.load(commitId, Commit.class);
+		Commit commit = repo.find(Commit.class, commitId);
 		if (commit == null) {
 			throw new GitException("commit " + commitId + " cannot be found");
 		}
@@ -235,7 +220,7 @@ public class DefaultGit implements Git {
 
 		// auto-merge
 		ObjectUtils.AutoMergeResult result = ObjectUtils.autoMerge(commit,
-				repo.load(branchHeadRef, Commit.class), resolution);
+				repo.find(Commit.class, branchHeadRef), resolution);
 
 		if (result.conflicts().isEmpty()
 				|| !ConflictResolution.LEAVE.equals(resolution)) {
@@ -246,13 +231,12 @@ public class DefaultGit implements Git {
 					commitId);
 
 			// construct new commit path, commit Id -> A -> branch HEAD
-			Commit reparentA = repo.load(idA, Commit.class);
+			Commit reparentA = repo.find(Commit.class, idA);
 			reparentA.setParent(commitId);
 
 			Commit merged = new Commit();
-			merged.setId(idgen.generate(branch + "#COMMIT$" + UUID.randomUUID()));
 			merged.setAuthor(author);
-			merged.setMerged(commitId);
+			merged.setParent2(commitId);
 			merged.setMessage(msg);
 
 			merged.index().putAll(result.index());
@@ -432,7 +416,7 @@ public class DefaultGit implements Git {
 			// recheck added
 			for (Map.Entry<String, Object> e : wadded.entrySet()) {
 				String name = e.getKey();
-				String wid = idgen.generate(e.getValue());
+				String wid = new Blob(e.getValue()).getId();
 
 				String id = index.get(name);
 
@@ -449,7 +433,7 @@ public class DefaultGit implements Git {
 			// recheck modified
 			for (Map.Entry<String, Object> e : wmodified.entrySet()) {
 				String name = e.getKey();
-				String wid = idgen.generate(e.getValue());
+				String wid = new Blob(e.getValue()).getId();
 
 				String id = index.get(name);
 
@@ -481,7 +465,7 @@ public class DefaultGit implements Git {
 	public void checkout(Workspace workspace, String commitId)
 			throws GitException, IOException {
 
-		Commit commit = repo.load(commitId, Commit.class);
+		Commit commit = repo.find(Commit.class, commitId);
 		if (commit == null) {
 			throw new GitException("commit " + commitId + " cannot be found");
 		}
@@ -489,7 +473,7 @@ public class DefaultGit implements Git {
 		Map<String, Object> cobjects = new HashMap<String, Object>();
 
 		for (Map.Entry<String, String> e : commit.index().entrySet()) {
-			Blob blob = repo.load(e.getValue(), Blob.class);
+			Blob blob = repo.find(Blob.class, e.getValue());
 			if (blob == null) {
 				throw new GitException("blob " + e.getValue()
 						+ " cannot be found");
@@ -590,9 +574,9 @@ public class DefaultGit implements Git {
 
 		// reverse walk!
 		while (currentId != null) {
-			Commit commit = repo.load(currentId, Commit.class);
+			Commit commit = repo.find(Commit.class, currentId);
 			if (commit == null) {
-				throw new GitException("unablt to load commit " + currentId);
+				throw new GitException("unable to find commit " + currentId);
 			}
 
 			lines.add(commit.toString());
@@ -602,7 +586,7 @@ public class DefaultGit implements Git {
 
 		for (int i = lines.size() - 1; i >= 0; --i) {
 			out.print(lines.get(i));
-			
+
 			if (i > 0) {
 				out.println("--------");
 			}

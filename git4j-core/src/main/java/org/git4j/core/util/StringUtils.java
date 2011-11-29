@@ -1,5 +1,9 @@
 package org.git4j.core.util;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Types;
+
 public abstract class StringUtils {
 
 	private static final char[] HEX = "0123456789abcdef".toCharArray();
@@ -15,6 +19,25 @@ public abstract class StringUtils {
 		return value.trim().length() == 0;
 	}
 
+	public static void setStringOrNull(PreparedStatement pstmt, int index,
+			String value) throws SQLException {
+		if (value == null) {
+			pstmt.setNull(index, Types.VARCHAR);
+		} else {
+			pstmt.setString(index, value);
+		}
+	}
+
+	public static String coalesce(String... values) {
+		for (int i = 0, len = values.length; i < len; ++i) {
+			if (!isEmpty(values[i])) {
+				return values[i].trim();
+			}
+		}
+
+		return null;
+	}
+
 	public static String toHexString(byte[] bytes) {
 		char[] hexs = new char[bytes.length << 1];
 
@@ -26,6 +49,17 @@ public abstract class StringUtils {
 		}
 
 		return new String(hexs);
+	}
+
+	public static byte[] fromHexString(String str) {
+		int len = str.length();
+		byte[] bytes = new byte[len >> 1];
+
+		for (int i = 0, j = 0; i < len; i += 2, ++j) {
+			bytes[j] = (byte) Integer.parseInt(str.substring(i, i + 2), 16);
+		}
+
+		return bytes;
 	}
 
 	public static String toString32(byte[] bytes) {
@@ -93,13 +127,13 @@ public abstract class StringUtils {
 
 			if (op < oDataLen) {
 				out[op] = AN[o2];
+				++op;
 			}
-			++op;
 
 			if (op < oDataLen) {
 				out[op] = AN[o3];
+				++op;
 			}
-			++op;
 		}
 
 		return String.valueOf(out, 0, op);

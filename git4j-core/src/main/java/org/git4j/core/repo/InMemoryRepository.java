@@ -12,7 +12,6 @@ import org.git4j.core.GitException;
 import org.git4j.core.objs.Blob;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.Commit;
-import org.git4j.core.objs.GitObject;
 import org.git4j.core.objs.UploadPack;
 import org.git4j.core.util.ObjectUtils;
 
@@ -34,14 +33,35 @@ public class InMemoryRepository implements Repository {
 		remotes = Collections.synchronizedMap(new HashMap<String, String>());
 	}
 
-	public void store(Blob blob) throws IOException {
-		objects.put(blob.getId(), blob);
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Blob)
+	 */
+	public String store(Blob blob) throws IOException {
+		String id = blob.getId();
+
+		objects.put(id, blob);
+		return id;
 	}
 
-	public void store(Commit commit) throws IOException {
-		objects.put(commit.getId(), commit);
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.Commit)
+	 */
+	public String store(Commit commit) throws IOException {
+		String id = commit.getId();
+
+		objects.put(id, commit);
+		return id;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#store(org.git4j.core.objs.UploadPack)
+	 */
 	public void store(UploadPack pack) throws IOException {
 		// store BLOBs
 		for (Blob blob : pack.getBlobs().values()) {
@@ -54,8 +74,13 @@ public class InMemoryRepository implements Repository {
 		}
 	}
 
-	public <T extends GitObject> T load(String id, Class<T> type)
-			throws IOException {
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#find(java.lang.Class,
+	 * java.lang.String)
+	 */
+	public <T> T find(Class<T> type, String id) throws IOException {
 		Object obj = objects.get(id);
 		if (obj == null) {
 			return null;
@@ -64,19 +89,35 @@ public class InMemoryRepository implements Repository {
 		return type.cast(obj);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#getLocalHead(java.lang.String)
+	 */
 	public Commit getLocalHead(String branch) throws IOException {
 		String headRef = heads.get(branch);
 		if (headRef == null) {
 			return null;
 		}
 
-		return load(headRef, Commit.class);
+		return find(Commit.class, headRef);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#getLocalHeadRef(java.lang.String)
+	 */
 	public String getLocalHeadRef(String branch) throws IOException {
 		return heads.get(branch);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#setLocalHeadRef(java.lang.String,
+	 * java.lang.String, java.lang.String)
+	 */
 	public void setLocalHeadRef(String branch, String headRef, String newHeadRef)
 			throws GitException, IOException {
 		synchronized (heads) {
@@ -88,10 +129,21 @@ public class InMemoryRepository implements Repository {
 		}
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#getRemoteHeadRef(java.lang.String)
+	 */
 	public String getRemoteHeadRef(String branch) throws IOException {
 		return remotes.get(branch);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#setRemoteHeadRef(java.lang.String,
+	 * java.lang.String, java.lang.String)
+	 */
 	public void setRemoteHeadRef(String branch, String headRef,
 			String newHeadRef) throws GitException, IOException {
 		synchronized (remotes) {
@@ -103,6 +155,11 @@ public class InMemoryRepository implements Repository {
 		}
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#getLocalBranches()
+	 */
 	public Collection<BranchAndHead> getLocalBranches() throws IOException {
 		List<BranchAndHead> list = new ArrayList<BranchAndHead>();
 
@@ -115,6 +172,11 @@ public class InMemoryRepository implements Repository {
 		return list;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#getRemoteBranches()
+	 */
 	public Collection<BranchAndHead> getRemoteBranches() throws IOException {
 		List<BranchAndHead> list = new ArrayList<BranchAndHead>();
 
@@ -127,14 +189,29 @@ public class InMemoryRepository implements Repository {
 		return list;
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#removeLocalBranch(java.lang.String)
+	 */
 	public void removeLocalBranch(String branch) throws IOException {
 		heads.remove(branch);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#removeRemoteBranch(java.lang.String)
+	 */
 	public void removeRemoteBranch(String branch) throws IOException {
 		remotes.remove(branch);
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.git4j.core.repo.Repository#wipe()
+	 */
 	public void wipe() throws IOException {
 		remotes.clear();
 		heads.clear();

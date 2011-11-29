@@ -7,7 +7,6 @@ import org.git4j.core.GitException;
 import org.git4j.core.objs.Blob;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.Commit;
-import org.git4j.core.objs.GitObject;
 import org.git4j.core.objs.UploadPack;
 
 public interface Repository {
@@ -17,20 +16,22 @@ public interface Repository {
 	 * 
 	 * @param blob
 	 *            the blob object
+	 * @return object id
 	 * @throws IOException
 	 *             if an IO error occurred
 	 */
-	void store(Blob blob) throws IOException;
+	String store(Blob blob) throws IOException;
 
 	/**
 	 * store commit object into this repository.
 	 * 
 	 * @param commit
 	 *            the commit object
+	 * @return object id
 	 * @throws IOException
 	 *             if an IO error occurred
 	 */
-	void store(Commit commit) throws IOException;
+	String store(Commit commit) throws IOException;
 
 	/**
 	 * store packed object (COMMITs and/or BLOBs) into this repository.
@@ -45,15 +46,15 @@ public interface Repository {
 	/**
 	 * Load git object by it's id.
 	 * 
-	 * @param id
-	 *            git object id
 	 * @param type
 	 *            git object type
+	 * @param id
+	 *            git object id
 	 * @return git object, <code>null</code> if not found
 	 * @throws IOException
 	 *             if an IO error occurred
 	 */
-	<T extends GitObject> T load(String id, Class<T> type) throws IOException;
+	<T> T find(Class<T> type, String id) throws IOException;
 
 	/**
 	 * Get head for a local branch.

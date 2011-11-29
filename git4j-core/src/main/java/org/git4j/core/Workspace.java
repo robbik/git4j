@@ -7,8 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.git4j.core.gen.ObjectIdGenerator;
-import org.git4j.core.gen.SHA256Generator;
+import org.git4j.core.objs.Blob;
 import org.git4j.core.objs.Commit;
 import org.git4j.core.objs.Status;
 import org.git4j.core.util.ObjectUtils;
@@ -21,8 +20,6 @@ public class Workspace {
 
 	private Map<String, Object> cobjects;
 
-	private ObjectIdGenerator idgen;
-
 	// changes (add) <name, content>
 	private Map<String, Object> added;
 
@@ -32,8 +29,7 @@ public class Workspace {
 	// changes (removed) <name>
 	private Set<String> removed;
 
-	public Workspace(Commit commit, Map<String, Object> cobjects,
-			ObjectIdGenerator idgen) {
+	public Workspace(Commit commit, Map<String, Object> cobjects) {
 		if (commit == null) {
 			cid = null;
 			cindex = Collections.emptyMap();
@@ -44,19 +40,14 @@ public class Workspace {
 
 		this.cobjects = cobjects == null ? new HashMap<String, Object>()
 				: cobjects;
-		this.idgen = idgen;
 
 		added = Collections.synchronizedMap(new HashMap<String, Object>());
 		modified = Collections.synchronizedMap(new HashMap<String, Object>());
 		removed = Collections.synchronizedSet(new HashSet<String>());
 	}
 
-	public Workspace(Commit commit, Map<String, Object> cobjects) {
-		this(commit, cobjects, new SHA256Generator());
-	}
-
 	public Workspace() {
-		this(null, null, new SHA256Generator());
+		this(null, null);
 	}
 
 	public synchronized String getCommitId() {
@@ -135,7 +126,7 @@ public class Workspace {
 	public synchronized Workspace add(String name, Object content) {
 		ObjectUtils.validateBlobContent(content);
 
-		String id = idgen.generate(content);
+		String id = Blob.getId(content);
 		String ccontentId = cindex.get(name);
 
 		// case: new name
