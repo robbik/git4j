@@ -1,12 +1,12 @@
 package org.git4j.core.transport;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 
 import org.git4j.core.GitException;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.UploadPack;
+import org.git4j.core.repo.Repository;
+import org.git4j.core.util.TransportHelper;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBufferInputStream;
 import org.jboss.netty.buffer.ChannelBufferOutputStream;
@@ -27,12 +27,16 @@ public class NettyServerTransport extends SimpleChannelUpstreamHandler {
 		this.transport = transport;
 	}
 
+	public NettyServerTransport(Repository repo) {
+		this.transport = new DirectTransport(repo);
+	}
+
 	private void sendOK(Channel channel) throws Exception {
 		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer();
 		ChannelBufferOutputStream out = new ChannelBufferOutputStream(buffer);
 
-		// TYPE
-		out.writeByte(Transport.TYPE_OK);
+		// data
+		TransportHelper.sendOK(out);
 
 		// flush
 		out.flush();
@@ -46,14 +50,8 @@ public class NettyServerTransport extends SimpleChannelUpstreamHandler {
 		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer();
 		ChannelBufferOutputStream out = new ChannelBufferOutputStream(buffer);
 
-		// TYPE
-		out.writeByte(Transport.TYPE_ERROR_MSG);
-
-		// ERROR CODE
-		out.writeUTF(code);
-
-		// ERROR MESSAGE
-		out.writeUTF(msg);
+		// data
+		TransportHelper.sendError(out, code, msg);
 
 		// flush
 		out.flush();
@@ -65,27 +63,9 @@ public class NettyServerTransport extends SimpleChannelUpstreamHandler {
 	private void handleFetch(Channel channel, ChannelBufferInputStream in)
 			throws Exception {
 		// read request
+		BranchAndHead[] branches = TransportHelper.receiveFetch(in, false);
 
-		// number of branches
-		int len = in.readInt();
-		if (len <= 0) {
-			len = 0;
-		}
-
-		BranchAndHead[] branches = new BranchAndHead[len];
-
-		for (int i = 0; i < len; ++i) {
-			BranchAndHead branch = new BranchAndHead();
-
-			// branch name
-			branch.setBranch(in.readUTF());
-
-			// branch head
-			branch.setHeadRef(in.readUTF());
-
-			branches[i] = branch;
-		}
-
+		// process
 		UploadPack[] packs;
 
 		try {
@@ -101,27 +81,11 @@ public class NettyServerTransport extends SimpleChannelUpstreamHandler {
 			return;
 		}
 
-		len = packs.length;
-
 		// write response
 		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer();
-
 		ChannelBufferOutputStream out = new ChannelBufferOutputStream(buffer);
-		ObjectOutputStream oos = new ObjectOutputStream(out);
 
-		// TYPE
-		out.write(Transport.TYPE_UPLOAD_PACK);
-
-		// NUMBER OF PACKs
-		out.write(len);
-
-		// PACKs
-		for (int i = 0; i < len; ++i) {
-			packs[i].serialize(oos);
-		}
-
-		// flush
-		oos.flush();
+		TransportHelper.sendUploadPack(out, out, packs);
 		out.flush();
 
 		// send
@@ -130,27 +94,16 @@ public class NettyServerTransport extends SimpleChannelUpstreamHandler {
 
 	private void handleUploadPack(Channel channel, ChannelBufferInputStream in)
 			throws Exception {
-		// number of packs
-		int len = in.readInt();
-		if (len <= 0) {
-			sendOK(channel);
-			return;
-		}
 
-		ObjectInputStream ois = new ObjectInputStream(in);
+		// read request
+		UploadPack[] packs = TransportHelper.receiveUploadPack(in, in, false);
+
+		// process
 		boolean error = false;
 
-		for (int i = 0; i < len; ++i) {
-			UploadPack pack = new UploadPack();
-
+		for (int i = 0, len = packs.length; i < len; ++i) {
 			try {
-				pack.deserialize(ois);
-			} catch (ClassNotFoundException e) {
-				throw (IOException) new IOException().initCause(e);
-			}
-
-			try {
-				transport.push(pack);
+				transport.push(packs[i]);
 			} catch (GitException e) {
 				sendError(channel, Transport.ERROR_CODE_GIT, e.getMessage());
 

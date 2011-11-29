@@ -14,7 +14,7 @@ import org.git4j.core.Workspace;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.repo.InMemoryRepository;
 import org.git4j.core.repo.Repository;
-import org.git4j.core.transport.PipedTransport;
+import org.git4j.core.transport.DirectTransport;
 import org.git4j.core.transport.Transport;
 import org.git4j.core.util.ObjectUtils;
 import org.junit.Before;
@@ -47,7 +47,7 @@ public class DefaultGitMergeTest {
 		git = new DefaultGit(repo);
 		remote = new DefaultGit(repoRemote);
 
-		transport = new PipedTransport(repoRemote);
+		transport = new DirectTransport(repoRemote);
 		workspace = new Workspace();
 	}
 

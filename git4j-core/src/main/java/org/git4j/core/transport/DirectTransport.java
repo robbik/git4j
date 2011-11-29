@@ -14,11 +14,11 @@ import org.git4j.core.objs.UploadPack;
 import org.git4j.core.repo.Repository;
 import org.git4j.core.util.ObjectUtils;
 
-public class PipedTransport implements Transport {
+public class DirectTransport implements Transport {
 
 	private Repository repo;
 
-	public PipedTransport(Repository repo) {
+	public DirectTransport(Repository repo) {
 		this.repo = repo;
 	}
 

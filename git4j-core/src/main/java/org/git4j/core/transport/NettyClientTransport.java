@@ -1,12 +1,11 @@
 package org.git4j.core.transport;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 
 import org.git4j.core.GitException;
 import org.git4j.core.objs.BranchAndHead;
 import org.git4j.core.objs.UploadPack;
+import org.git4j.core.util.TransportHelper;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBufferInputStream;
 import org.jboss.netty.buffer.ChannelBufferOutputStream;
@@ -45,23 +44,7 @@ public class NettyClientTransport implements Transport {
 		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer();
 		ChannelBufferOutputStream out = new ChannelBufferOutputStream(buffer);
 
-		// TYPE
-		out.writeByte(Transport.TYPE_FETCH);
-
-		// number of branches
-		out.writeInt(branches.length);
-
-		for (int i = 0, len = branches.length; i < len; ++i) {
-			BranchAndHead branch = branches[i];
-
-			// branch name
-			out.writeUTF(branch.getBranch());
-
-			// branch head
-			out.writeUTF(branch.getHeadRef());
-		}
-
-		// flush
+		TransportHelper.sendFetch(out, branches);
 		out.flush();
 
 		// send!
@@ -80,7 +63,6 @@ public class NettyClientTransport implements Transport {
 
 		// read response
 		ChannelBufferInputStream in = new ChannelBufferInputStream(buffer);
-		ObjectInputStream ois = new ObjectInputStream(in);
 
 		// TYPE
 		int type = in.readUnsignedByte();
@@ -100,45 +82,19 @@ public class NettyClientTransport implements Transport {
 					+ type + ")");
 		}
 
-		// NUMBER OF PACKs
-		int len = in.readInt();
-
-		UploadPack[] packs = new UploadPack[len];
-
-		// PACKs
-		for (int i = 0; i < len; ++i) {
-			UploadPack pack = new UploadPack();
-
-			try {
-				pack.deserialize(ois);
-			} catch (ClassNotFoundException e) {
-				throw (IOException) new IOException().initCause(e);
-			}
-
-			packs[i] = pack;
-		}
-
-		return packs;
+		// data
+		return TransportHelper.receiveUploadPack(in, in, false);
 	}
 
 	public void push(UploadPack pack) throws GitException, IOException {
 		// send request
 		ChannelBuffer buffer = ChannelBuffers.dynamicBuffer();
-
 		ChannelBufferOutputStream out = new ChannelBufferOutputStream(buffer);
-		ObjectOutputStream oos = new ObjectOutputStream(out);
 
-		// TYPE
-		out.writeByte(Transport.TYPE_UPLOAD_PACK);
-
-		// NUMBER OF PACKs
-		out.writeInt(1);
-
-		// PACKs
-		pack.serialize(oos);
+		// data
+		TransportHelper.sendUploadPack(out, out, pack);
 
 		// flush
-		oos.flush();
 		out.flush();
 
 		// send!
